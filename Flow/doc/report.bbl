@@ -1,0 +1,19 @@
+\begin{thebibliography}{1}
+\providecommand{\url}[1]{\texttt{#1}}
+\providecommand{\urlprefix}{URL }
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi:\discretionary{}{}{}#1}\else
+  \providecommand{\doi}{doi:\discretionary{}{}{}\begingroup
+  \urlstyle{rm}\Url}\fi
+\providecommand{\selectlanguage}[1]{\relax}
+\providecommand{\eprint}[2][]{\url{#2}}
+
+\bibitem{CPPunorderedMap}
+Network, T. C.~R.: Standard C++ Library reference [online]. 2013.
+\newline\urlprefix\url{http://www.cplusplus.com/reference/unordered_map/unordered_map/}
+
+\bibitem{CPPsort}
+Network, T. C.~R.: Standard C++ Library reference [online]. 2013.
+\newline\urlprefix\url{http://www.cplusplus.com/reference/algorithm/sort/}
+
+\end{thebibliography}

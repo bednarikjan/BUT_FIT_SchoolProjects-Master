@@ -1,0 +1,44 @@
+\documentclass[12pt,a4paper,titlepage,final]{article}
+
+%%% ENCODING AND LANGUAGE
+\usepackage[utf8]{inputenc} 
+%\usepackage[czech]{babel}
+
+%%% FIGURES
+\usepackage{graphicx}	 % support the \includegraphics command and options
+
+%%% ToC (table of contents) APPEARANCE
+\usepackage[nottoc,notlof,notlot]{tocbibind} % Put the bibliography in the ToC
+
+%%% Hyperlinks
+\usepackage[bookmarksopen,colorlinks,plainpages=false,urlcolor=blue,unicode,linkcolor=blue]{hyperref}
+\usepackage{url}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+    
+%%% Title page
+\input{title.tex}
+
+\pagenumbering{roman}
+\setcounter{page}{2}
+\input{abstract_keywords.tex}
+\newpage
+
+%%% Table of Contents
+\tableofcontents
+
+\newpage
+\pagestyle{plain}
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\input{content.tex}
+
+\newpage
+
+\bibliographystyle{plain}
+\bibliography{bibliography}
+
+\end{document}

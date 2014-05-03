@@ -1,0 +1,189 @@
+\documentclass[12pt,a4paper,titlepage,final]{article}
+
+%%% ENCODING AND LANGUAGE
+\usepackage[czech]{babel}
+\usepackage[utf8]{inputenc}
+
+
+%%% Hyperlinks
+\usepackage[bookmarksopen,colorlinks,plainpages=false,urlcolor=blue,unicode,linkcolor=blue]{hyperref}
+\usepackage{url}
+
+%%% Tables
+\usepackage{multirow}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% title
+    
+\begin{centering}
+\textsc{\textbf{PDS Přenos dat, počítačové sítě a protokoly} \\
+FIT VUT Brno\\
+}
+
+\rule{\textwidth}{1.6pt}\vspace*{-\baselineskip}\vspace*{23pt} 
+
+\begin{large}
+\textsc{Agregace a třídění flow dat - dokumentace}
+\end{large}
+
+\rule{\textwidth}{1.6pt}\\ % Thick horizontal line
+
+\vspace*{5pt} 
+\begin{footnotesize}
+\today
+\end{footnotesize}
+\vspace*{5pt} 
+
+\begin{large}
+Jan Bednařík
+\end{large}
+
+\end{centering}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Obsah
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Úvod}
+Tato dokumentace popisuje návrh a realizaci programu \texttt{flow}, jehož úkolem je agregovat a třídit síťové toky zachycené nástrojem \emph{nfdump}. Kromě získání korektních výstupů bylo hlavním cílem dosažení co nejefektivnějšího řešení, následující text se tedy zaměřuje především na implementační detaily kritické pro rychlý běh programu. Kapitola \ref{txt:implementace} popisuje návrh programu, způsob reprezentace klíčových dat a využité algoritmy, kapitola \ref{txt:optimalizace} vysvětluje princip optimalizačního řešení a kapitola \ref{txt:experimenty} nakonec shrnuje výsledky testů nad reálnými daty.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Implementace} \label{txt:implementace}
+Při výběru programovacího jazyka byla zohledňována předně časová efektivnost výsledného spustitelného programu, ale také možnost rychlé implementace a prototypování. Zvolen byl jazyk C++, neboť díky kompilaci do strojového kódu obecně vykazuje vyšší rychlost běhu programu, než interpretované jazyky, navíc oproti potenciálně rychlejším jazykům (jako C) nabízí objektově orientovaný přístup a pokročilé abstraktní datové struktury.
+
+Funkčně i časově významnými částmi programu je načítání vstupních souborů, agregace toků a jejich následné řazení. Načítání i zpracování souborů probíhá sekvenčně. Agregace je prováděna za pomocí vyhledávací struktury \emph{hashovací tabulka}, v níž je asociována reprezentace IP adresy nebo síťového portu (v závislosti na vstupních parametrech programu) s hodnotou v podobě dvojice počet bajtů - počet paketů. Řazení je následně provedeno nad vektorem dvojic klíč - hodnota z původní hashovací tabulky za pomocí metody \emph{quicksort}. 
+	
+%-------------------------------------------------
+\subsection{Datové struktury}
+
+\paragraph{IP adresa }
+Z experimentálních výsledků (viz \ref{txt:experimenty}) vyplývá, že na rychlosti běhu programu se značnou měrou podílí výběr vhodné datové struktury pro reprezentaci IP adresy (případně portu) a pro tabulku s asociativním vyhledáváním.
+
+Program podporuje agregaci podle IP adresy verze IPv4 i IPv6, pro jednu libovolnou adresu je tedy nutné vyhradit nejméně 128 bitů. Současně je nezbytné zachovat informaci o verzi IP. S ohledem na standardní podporované datové typy jazyka C++ byla zvolena následující datová struktura:
+
+\begin{verbatim}
+struct IP {
+    uint64_t ip128bit[2];
+    uint32_t sa_family;
+};
+\end{verbatim}
+
+Jak ukazují experimentální výsledky, binární reprezentace IP adresy na co nejmenším počtu bitů může například oproti nabízející se textové reprezentaci (pomocí datového typu \texttt{string}) zrychlit běh až 3,7krát.
+
+\paragraph{Hashovací tabulka}
+Pro implementaci hashovací tabulky je využit standardní kontejner \texttt{std::unordered\_map} jazyka C++, který je efektivní díky konstantní časové složitosti \emph{O(1)} přístupu k prvku \cite{CPPunorderedMap}.
+
+\begin{verbatim}
+unordered_map<IP, PacketsBytes, Hasher, EqualFn> 
+    *aggregatedFlows;
+\end{verbatim}
+
+\texttt{PacketsBytes} zde představuje dvojici počet paketů - počet bajtů, \texttt{Hasher} je funkční objekt realizující vlastní hashovací funkci a \texttt{EqualFn} je funkční objekt realizující porovnání dvou klíčů.
+
+Původní implementace programu \texttt{flow} pracovala s kontejnerem \texttt{std::map}, nicméně ten je interně implementován jako binární vyhledávací strom a jak ukazují experimentální výsledky, využití této struktury značně zpomaluje běh programu.
+
+Datový typ \texttt{uint64\_t} pro reprezentaci adresy IP byl zvolen z důvodu efektivnější implementace hashovací funkce. Delší pole složené z jednotek menšího datového typu (např. \texttt{uint8\_t[16]}) vede na více kroků cyklu (hashuje se iterativně po položkách pole).
+
+%-------------------------------------------------
+\subsection{Algoritmy}
+Řazení již agregovaných dat probíhá nad kontejnerem\\ \texttt{std::vector<pair<IP,~PacketsBytes>~>} za pomocí algoritmu \texttt{std::sort} ze standardní C++ knihovny \texttt{<algorithm>}. Řazení dosahuje lineárně logaritmické časové složitosti \emph{O($N*log N$)} \cite{CPPsort}.
+
+%-------------------------------------------------
+\subsection{Spuštění programu a omezení}		
+\begin{verbatim}
+flow -f adresar -a agregace -s razeni
+
+    -a
+            srcip = IPv4/32 nebo IPv6/128
+            srcip4/mask = IPv4/1-32
+            srcip6/mask = IPv6/1-128
+    -s
+            bajty
+            pakety
+\end{verbatim}
+
+Nutno zdůraznit, že hodnota \texttt{directory} parametru \texttt{-f} opravdu musí zastupovat cestu k \emph{adresáři}, nikoliv konkrétnímu souboru pro zpracování.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Optimalizace} \label{txt:optimalizace}
+Kromě optimalizací programu prostřednictvím vybraných datových struktur a algoritmů byla rovněž dodatečně doplněna optimalizace maskování IP adresy (podle zadaného parametru). Maskování probíhá iterativně po jednotlivých bajtech IP adresy. Namísto průchodu celou adresou se však začíná maskovat až od toho bajtu, na němž je v dílčí 8bitové masce přítomna aspoň jedna 0. Tato úprava algoritmu přinesla další časové zrychlení (viz kapitola~\ref{txt:experimenty}).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Experimentální výsledky} \label{txt:experimenty}
+Program byl testován z hlediska rychlosti běhu při zpracování referenčních vstupních souborů zachycujících anonymizované záznamy z páteřní sítě\\27.1.2014 v době od 07:00 do 08:00. Daný časový interval obsahuje 1~123~353 zaznamenaných datových toků. Testování proběhlo na referenčním testovacím stroji \texttt{test-nfsen.net.vutbr.cz} (OS 
+Red Hat Enterprise Linux Server release 6.5 (Santiago), 12 x86\_64 CPU, 44 GB RAM, vstupní data uložena v RAM disku).
+
+Tabulka \ref{tab:rychlosti} shrnuje výsledky měření při agregaci podle IP adresy a podle portu a porovnává efektivnost implementací ve čtyřech kombinacích, kdy je IP adresa reprezentována binárně (\emph{uint64\_t[2]}) či textově (\emph{string}) a kdy je tabulka s asociativním vyhledáváním interně implementována jako binární vyhledávací strom (\emph{map}) nebo jako hashovací tabulka (\emph{unordered\_map}).
+
+Jedná se o implementaci bez použití optimalizace popsané v kapitole \ref{txt:optimalizace}. Čas byl měřen nástrojem \texttt{time} s tím, že výstup je přesměrován do souboru:
+
+\begin{verbatim}
+./flow -f /mnt/ramfs/2014-01-27/ -a srcip -s packets
+./flow -f /mnt/ramfs/2014-01-27/ -a srcport -s packets
+\end{verbatim}
+
+
+\begin{table}[htbp]
+  \centering
+  \caption{Výsledky měření doby běhu programu \texttt{flow}.}
+    \begin{tabular}{rcrr}
+    \multicolumn{1}{l}{\textbf{TEST}} & \textbf{AGREGACE} & \textbf{ČAS [s]} & \textbf{TOKŮ/s} \\
+    \hline
+    \multicolumn{1}{l}{\multirow{2}[1]{*}{\textbf{map, string}}} & ip    & 35,063 & 32095 \\
+    \multicolumn{1}{l}{} & port  & 4,564 & 246572 \\
+    \hline
+    \multicolumn{1}{l}{\multirow{2}[0]{*}{\textbf{map, uint64\_t[2]}}} & ip    & 9,402 & 119693 \\
+    \multicolumn{1}{l}{} & port  & 4,567 & 246410 \\
+	\hline
+    \multicolumn{1}{l}{\multirow{2}[0]{*}{\textbf{unordered\_map, string}}} & ip    & 12,567 & 89548 \\
+    \multicolumn{1}{l}{} & port  & 1,147 & 981127 \\
+	\hline
+    \multicolumn{1}{l}{\multirow{2}[0]{*}{\textbf{unordered\_map, uint64\_t[2]}}} & ip    & 5,223 & 215461 \\
+    \multicolumn{1}{l}{} & port  & 1,126 & 999425 \\
+    \end{tabular}
+  \label{tab:rychlosti}
+\end{table}
+
+Z výsledků plyne, že kombinace kontejneru \texttt{std::unordered\_map} a binární reprezentace IP adresy na 128 bitů vede k nejlepším výsledkům.
+
+Výsledek testování finální implementace programu \texttt{flow} nad celodenním záznamem síťových toků na zachycených na páteřní síti shrnuje tabulka \ref{tab:final}. Výrazný rozdíl v počtu zpracovaných toků za sekundu oproti testům shrnutým v tabulce \ref{tab:rychlosti} může být dán částečně zahrnutím optimalizace maskování IP adresy, kolísající přesností měření závislé na množství vstupních dat a rovněž aktuální vytížeností testovacího stroje, který v době testování zatěžovalo více uživatelů.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Výsledek testování finální implementace porogramu \texttt{flow}}.
+    \begin{tabular}{rcrr}
+    \multicolumn{1}{l}{\textbf{TEST}} & \textbf{AGREGACE} & \textbf{ČAS [s]} & \textbf{TOKŮ/s}\\
+    \hline
+    \textbf{flow (celodenní záznam)~~~~~} & ip    & 128   & 3408416\\
+          & port  & 37,175 & 11735770 \\
+    \end{tabular}
+  \label{tab:final}
+\end{table}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Závěr}
+V textu byl detailně nastíněn návrh a implementace programu \texttt{flow}. Vysvětleny byly vlivy využitých datových struktur i algoritmů na časovou efektivitu programu a byly shrnuty provedené optimalizace. Z uvedených výsledků experimentů provedených na reálných datech vyplývá, že program dosáhl nejlepších výsledků při binární reprezentaci IP adresy a využití tabulky s asociativním vyhledáváním implementované pomocí hashovací tabulky.
+
+Finální výsledek, tedy téměř 3,5 milionu zpracovaných toků za sekundu při agregaci podle IP adresy převyšuje rychlost, jíž dosahuje existující řešení v podobě programu \texttt{nfdump}, nicméně je nutné brát v potaz, že testování proběhlo na velice výkonném stroji a data se nečetla z pevného disku, nýbrž z operační paměti, tudíž lze očekávat, že na běžném PC či slabším serveru nebudou výsledky zdaleka tak zářné.
+
+Program lze dále urychlovat. Jako další optimalizace se nabízí předně paralelizace na úrovni čtení souborů, agregace i řazení.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Bibliografie
+
+\bibliographystyle{czechiso}
+\bibliography{bibliography}
+
+\end{document}
