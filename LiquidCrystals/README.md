@@ -1,4 +1,16 @@
-BUT_FIT_SchoolProjects-Master
-=============================
+Liquid Crystals
+===============
 
-Projects and assignments from the courses I assigned for during master's degree studies at Brno University of Technology, Faculty of Information Technology.  http://www.fit.vutbr.cz/
+The aim of this project was to create the visualization explaining the prinicple of the LCD (Liquid Crystals Display). The report (doc/report.pdf) then provides further insight into the problematics of liquid crystals in general.
+
+How to run
+---------------
+---------------
+
+Prerequisities:
+---------------
+- Python 2.7 interpreter and [wxPython](http://www.wxpython.org/ "wxPython") installed is needed
+
+Run:
+----
+    python lc.py
